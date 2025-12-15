@@ -1,10 +1,9 @@
 name: Sync to CNB.COOL
 
 on:
+  release:
+    types: [published]
   push:
-    branches: [ master ]
-    tags: [ 'v*' ]
-  pull_request:
     branches: [ master ]
 
 permissions:
@@ -14,6 +13,7 @@ permissions:
 env:
   CNB_USERNAME: cnb
   CNB_PROJECT: helloworld
+  LATEST_TAG: latest
 
 jobs:
   sync-and-release:
@@ -30,36 +30,33 @@ jobs:
       with:
         node-version: '16'
     
-    - name: Prepare release info for tags
-      if: startsWith(github.ref, 'refs/tags/')
-      id: tag_info
+    - name: Get Release Info
+      id: release_info
       run: |
-        echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-        echo "is_release=true" >> $GITHUB_OUTPUT
-    
-    - name: Prepare release info for branches
-      if: github.ref == 'refs/heads/master'
-      id: branch_info
-      run: |
-        echo "version=continuous" >> $GITHUB_OUTPUT
-        echo "is_release=false" >> $GITHUB_OUTPUT
+        if [ "${{ github.event_name }}" = "release" ]; then
+          echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          echo "is_latest=true" >> $GITHUB_OUTPUT
+        else
+          echo "version=continuous" >> $GITHUB_OUTPUT
+          echo "is_latest=false" >> $GITHUB_OUTPUT
+        fi
     
     - name: Create package for CNB.COOL
       run: |
         # Create a zip archive of the entire project
         zip -r helloworld-package.zip . -x "*.git*" "*/node_modules/*" "*/target/*" "*/dist/*"
     
-    - name: Sync to CNB.COOL on tag push
-      if: startsWith(github.ref, 'refs/tags/')
+    - name: Sync Release to CNB.COOL
+      if: github.event_name == 'release'
       uses: distributhor/workflow-webhook@v3
       with:
         webhook_url: "https://cnb.cool/api/v1/projects/${{ env.CNB_USERNAME }}/${{ env.CNB_PROJECT }}/releases"
         webhook_secret: ${{ secrets.CNB_API_KEY }}
-        data: '{"version": "${{ steps.tag_info.outputs.version }}", "package_url": "${{ github.server_url }}/${{ github.repository }}/archive/${{ github.ref_name }}.zip"}'
+        data: '{"version": "${{ env.LATEST_TAG }}", "package_url": "${{ github.event.release.zipball_url }}", "original_version": "${{ steps.release_info.outputs.version }}"}'
         verify_ssl: false
     
     - name: Sync to CNB.COOL on branch push
-      if: github.ref == 'refs/heads/master'
+      if: github.ref == 'refs/heads/master' && github.event_name != 'release'
       uses: distributhor/workflow-webhook@v3
       with:
         webhook_url: "https://cnb.cool/api/v1/projects/${{ env.CNB_USERNAME }}/${{ env.CNB_PROJECT }}/deployments"
@@ -83,4 +80,4 @@ jobs:
             title: "Sync to CNB.COOL failed",
             body: `${errorMessage}\n\nWorkflow: ${{ github.workflow }}\nJob: ${{ github.job }}\nCommit: ${{ github.sha }}\nRef: ${{ github.ref }}`,
             labels: ['sync-failure']
-          });
+          })

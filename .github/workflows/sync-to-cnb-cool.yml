@@ -56,7 +56,6 @@ jobs:
         webhook_url: "https://cnb.cool/api/v1/projects/${{ env.CNB_USERNAME }}/${{ env.CNB_PROJECT }}/releases"
         webhook_secret: ${{ secrets.CNB_API_KEY }}
         data: '{"version": "${{ steps.tag_info.outputs.version }}", "package_url": "${{ github.server_url }}/${{ github.repository }}/archive/${{ github.ref_name }}.zip"}'
-        http_method: POST
         verify_ssl: false
     
     - name: Sync to CNB.COOL on branch push
@@ -66,7 +65,6 @@ jobs:
         webhook_url: "https://cnb.cool/api/v1/projects/${{ env.CNB_USERNAME }}/${{ env.CNB_PROJECT }}/deployments"
         webhook_secret: ${{ secrets.CNB_API_KEY }}
         data: '{"branch": "master", "commit_sha": "${{ github.sha }}", "package_url": "${{ github.server_url }}/${{ github.repository }}/archive/${{ github.sha }}.zip"}'
-        http_method: POST
         verify_ssl: false
     
     - name: Create Issue on failure
